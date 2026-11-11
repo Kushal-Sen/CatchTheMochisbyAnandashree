@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Catch the Mochi - 2 Player Game</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Gaegu for hand-painted cute lettering, Quicksand for clean UI -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Quicksand:wght@600;700;800&display=swap" rel="stylesheet">
+  
+  <style>
+    * {
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+      box-sizing: border-box;
+    }
+    
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: 'Quicksand', sans-serif;
+      background: #f7eed7;
+    }
+
+    .font-painted {
+      font-family: 'Gaegu', cursive;
+      letter-spacing: 1px;
+      text-shadow: 2px 3px 0px rgba(138, 122, 196, 0.25);
+    }
+
+    /* Textured canvas look replicating the real hand-painted canvas */
+    #canvas-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      background: 
+        radial-gradient(ellipse at 80% 25%, rgba(247, 185, 178, 0.75) 0%, transparent 60%),
+        radial-gradient(ellipse at 15% 30%, rgba(243, 237, 142, 0.85) 0%, transparent 55%),
+        linear-gradient(180deg, #f4e899 0%, #f6cb9d 35%, #f2b3ad 65%, #c8dd82 100%);
+    }
+
+    /* Canvas weave texture overlay */
+    #canvas-container::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.18;
+      background-image: 
+        repeating-linear-gradient(0deg, #3d2f19 0px, #3d2f19 1px, transparent 1px, transparent 4px),
+        repeating-linear-gradient(90deg, #3d2f19 0px, #3d2f19 1px, transparent 1px, transparent 4px);
+      z-index: 5;
+    }
+
+    /* Vignette and hand-painted lighting warmth */
+    #canvas-container::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      box-shadow: inset 0 0 70px rgba(189, 137, 85, 0.28);
+      z-index: 6;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 10;
+    }
+
+    .touch-guide {
+      pointer-events: none;
+      transition: opacity 0.5s ease;
+    }
+
+    /* Bubbly button styling */
+    .bubbly-btn {
+      box-shadow: 0 6px 0 rgba(110, 80, 160, 0.4), 0 10px 18px rgba(0, 0, 0, 0.12);
+      transition: all 0.12s ease;
+    }
+    .bubbly-btn:active {
+      transform: translateY(4px);
+      box-shadow: 0 2px 0 rgba(110, 80, 160, 0.4), 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+  </style>
+</head>
+<body class="w-screen h-screen overflow-hidden">
+
+  <div id="canvas-container" class="w-full h-full">
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Top UI Header -->
+    <div class="absolute top-0 left-0 w-full z-20 flex flex-col items-center pt-3 px-4 pointer-events-none">
+      <!-- Hand-painted Title as in painting -->
+      <div class="text-center">
+        <h1 class="font-painted text-4xl sm:text-6xl font-bold text-[#988bc7] drop-shadow-md tracking-wider leading-none">
+          Catch the mochi
+        </h1>
+        <p class="text-xs sm:text-sm text-[#7a6452] font-bold tracking-wide mt-1 bg-white/40 px-3 py-0.5 rounded-full backdrop-blur-sm shadow-sm inline-block">
+          Wave: <span id="mochi-counter" class="text-pink-600 font-extrabold text-base">0 / 10</span> Mochis
+        </p>
+      </div>
+
+      <!-- Scoreboard Panels -->
+      <div class="w-full max-w-xl flex justify-between items-center mt-2 px-2 pointer-events-auto">
+        <!-- Player 1 (Mint) -->
+        <div class="flex items-center gap-2 bg-white/75 backdrop-blur-md px-3.5 py-1.5 rounded-2xl shadow-md border-2 border-[#79d4c7]">
+          <div class="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-[#7ddacb] border-2 border-white shadow-inner flex items-center justify-center text-xs">
+            🍡
+          </div>
+          <div class="text-left">
+            <div class="text-[10px] sm:text-xs font-extrabold uppercase tracking-wider text-[#358d80]">Player 1 (A / D)</div>
+            <div class="text-lg sm:text-2xl font-black text-[#26685f] leading-none" id="score-p1">0</div>
+          </div>
+        </div>
+
+        <!-- Audio mute/unmute toggle -->
+        <button id="sound-btn" class="pointer-events-auto bg-white/80 hover:bg-white text-gray-700 p-2 sm:px-3 sm:py-2 rounded-xl shadow-sm border border-amber-200 text-xs sm:text-sm font-bold flex items-center gap-1 active:scale-95 transition-transform" title="Toggle Sound">
+          <span id="sound-icon">🔊</span>
+        </button>
+
+        <!-- Player 2 (Lavender) -->
+        <div class="flex items-center gap-2 bg-white/75 backdrop-blur-md px-3.5 py-1.5 rounded-2xl shadow-md border-2 border-[#b59fe8]">
+          <div class="text-right">
+            <div class="text-[10px] sm:text-xs font-extrabold uppercase tracking-wider text-[#7c63be]">Player 2 (◀ / ▶)</div>
+            <div class="text-lg sm:text-2xl font-black text-[#60499d] leading-none" id="score-p2">0</div>
+          </div>
+          <div class="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-[#baa6ed] border-2 border-white shadow-inner flex items-center justify-center text-xs">
+            🍡
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- On-screen Touch Zones Indication (Helps 2 players find their half on tablet/phone) -->
+    <div id="touch-guide" class="touch-guide absolute bottom-3 w-full px-6 flex justify-between items-center text-xs sm:text-sm font-bold text-gray-600/70 z-10">
+      <div class="flex items-center gap-1.5 bg-white/50 backdrop-blur-sm px-3 py-1 rounded-full border border-teal-200">
+        <span class="inline-block w-2.5 h-2.5 rounded-full bg-[#7ddacb]"></span>
+        P1 Drag Left Half (or A/D)
+      </div>
+      <div class="flex items-center gap-1.5 bg-white/50 backdrop-blur-sm px-3 py-1 rounded-full border border-purple-200">
+        P2 Drag Right Half (or ◀/▶)
+        <span class="inline-block w-2.5 h-2.5 rounded-full bg-[#baa6ed]"></span>
+      </div>
+    </div>
+
+    <!-- Game Over / Round Summary Overlay Modal -->
+    <div id="round-modal" class="hidden absolute inset-0 z-30 bg-black/35 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="bg-gradient-to-b from-[#fffaf0] to-[#fdede0] rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border-4 border-[#e9cb9e] text-center transform scale-95 transition-all duration-300">
+        
+        <div id="modal-badge" class="inline-block px-4 py-1 rounded-full text-xs font-black tracking-widest uppercase mb-2 shadow-sm bg-purple-200 text-purple-800">
+          Wave Completed!
+        </div>
+
+        <h2 id="modal-title" class="font-painted text-4xl sm:text-5xl font-bold text-[#8673bd] my-1">
+          Player 1 Wins! 🌸
+        </h2>
+
+        <p id="modal-desc" class="text-sm text-[#735e50] font-semibold mb-5">
+          All 10 mochis have fallen from the pastel sky!
+        </p>
+
+        <!-- Final Round Sticks Showcase -->
+        <div class="bg-amber-100/60 rounded-2xl p-4 border border-amber-200 mb-6 flex justify-around items-center">
+          <div class="text-center">
+            <span class="text-xs font-bold text-[#2a7b6f] uppercase block mb-1">Mint Stick (P1)</span>
+            <div id="final-p1" class="text-3xl font-black text-[#1e6157]">0</div>
+            <span class="text-[11px] text-gray-500 font-semibold">Skewered</span>
+          </div>
+
+          <div class="h-10 w-[2px] bg-amber-300"></div>
+
+          <div class="text-center">
+            <span class="text-xs font-bold text-[#7155b5] uppercase block mb-1">Lilac Stick (P2)</span>
+            <div id="final-p2" class="text-3xl font-black text-[#563d96]">0</div>
+            <span class="text-[11px] text-gray-500 font-semibold">Skewered</span>
+          </div>
+        </div>
+
+        <div class="flex gap-3 justify-center">
+          <button id="btn-restart" class="bubbly-btn bg-[#a791e3] hover:bg-[#977fdb] text-white font-bold py-3 px-8 rounded-2xl text-base sm:text-lg flex items-center justify-center gap-2 active:scale-95 transition-all">
+            <span>✨ Catch Another 10 Mochis!</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    /* =========================================================
+     * AUDIO SYNTHESIZER (Web Audio API - No external assets)
+     * ========================================================= */
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+        this.muted = false;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) {
+            this.ctx = new AudioContext();
+          }
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      playCatchSound(isPlayer1) {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        // Cheerful cute pitch: Mint higher chime, Lilac warm harmonic
+        const baseFreq = isPlayer1 ? 587.33 : 440.0; // D5 vs A4
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(baseFreq, now);
+        osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, now + 0.12);
+
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.23);
+
+        // Soft pop bubble harmonic
+        const popOsc = this.ctx.createOscillator();
+        const popGain = this.ctx.createGain();
+        popOsc.type = 'sine';
+        popOsc.frequency.setValueAtTime(800, now);
+        popOsc.frequency.exponentialRampToValueAtTime(200, now + 0.08);
+
+        popGain.gain.setValueAtTime(0.2, now);
+        popGain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+
+        popOsc.connect(popGain);
+        popGain.connect(this.ctx.destination);
+        popOsc.start(now);
+        popOsc.stop(now + 0.09);
+      }
+
+      playDropSound() {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(320, now);
+        osc.frequency.exponentialRampToValueAtTime(140, now + 0.15);
+
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.16);
+      }
+
+      playWinFanfare() {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
+        notes.forEach((freq, i) => {
+          const now = this.ctx.currentTime + i * 0.1;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, now);
+
+          gain.gain.setValueAtTime(0.25, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+
+          osc.start(now);
+          osc.stop(now + 0.36);
+        });
+      }
+    }
+
+    const sound = new SoundEngine();
+
+    /* =========================================================
+     * GAME CONFIG & STATE
+     * ========================================================= */
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const TOTAL_MOCHIS_IN_ROUND = 10;
+
+    const MOCHI_PALETTES = [
+      { name: 'mint', fill: '#80dfd2', dark: '#52b7a9', light: '#a6ece2', face: '#265b53' },     // Like top-left in art
+      { name: 'lilac', fill: '#b8a5e8', dark: '#9179cc', light: '#d1c4f5', face: '#4d397a' },    // Like bottom-right in art
+      { name: 'cyan', fill: '#73d4df', dark: '#48aab6', light: '#9ee6ef', face: '#1c5a61' },     // Middle mint-cyan
+      { name: 'peach', fill: '#ffb9a8', dark: '#df8e7b', light: '#ffd1c6', face: '#7a3e30' },    // Pastel peach
+      { name: 'custard', fill: '#fbe285', dark: '#d7bb52', light: '#ffecaa', face: '#6a5611' }   // Pastel warm yellow
+    ];
+
+    let width = 0;
+    let height = 0;
+
+    let mochisSpawned = 0;
+    let mochisFinished = 0;
+    let isGameOver = false;
+
+    // Keys currently held
+    const keys = {
+      KeyA: false,
+      KeyD: false,
+      ArrowLeft: false,
+      ArrowRight: false
+    };
+
+    // Touch pointers tracker
+    const activeTouches = new Map();
+
+    // Two Sticks
+    class Stick {
+      constructor(isPlayer1) {
+        this.isPlayer1 = isPlayer1;
+        this.x = 0;
+        this.y = 0;
+        this.stickHeight = 270;
+        this.stickWidth = 14;
+        this.targetX = 0;
+        this.speed = 10;
+        this.caughtMochis = [];
+        this.colorTheme = isPlayer1 ? '#71d1c3' : '#b29de6';
+        this.woodColor = '#c4b182';
+        this.woodShadow = '#a59163';
+        this.pointColor = '#dfd1a7';
+        this.wobble = 0;
+      }
+
+      initPos(w, h) {
+        this.y = h - 20;
+        this.stickHeight = Math.max(220, Math.min(h * 0.45, 330));
+        this.stickWidth = Math.max(12, Math.min(w * 0.02, 18));
+        this.x = this.isPlayer1 ? w * 0.3 : w * 0.7;
+        this.targetX = this.x;
+      }
+
+      update() {
+        // Keyboard motion
+        if (this.isPlayer1) {
+          if (keys.KeyA) this.targetX -= this.speed;
+          if (keys.KeyD) this.targetX += this.speed;
+        } else {
+          if (keys.ArrowLeft) this.targetX -= this.speed;
+          if (keys.ArrowRight) this.targetX += this.speed;
+        }
+
+        // Keep inside bounds
+        const minX = this.isPlayer1 ? 40 : width * 0.45;
+        const maxX = this.isPlayer1 ? width * 0.55 : width - 40;
+        this.targetX = Math.max(minX, Math.min(maxX, this.targetX));
+
+        // Smooth interpolate to target
+        const dx = (this.targetX - this.x);
+        this.x += dx * 0.22;
+        this.wobble = dx * 0.03; // Dynamic tilt when moving
+      }
+
+      getTipPosition() {
+        // Height shrinks slightly as mochis stack up so next catches stack above
+        const stackOffset = this.caughtMochis.length * 36;
+        return {
+          x: this.x,
+          y: this.y - this.stickHeight + stackOffset
+        };
+      }
+
+      draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.wobble * 0.05);
+
+        const sw = this.stickWidth;
+        const sh = this.stickHeight;
+
+        // Wooden stick shadow on ground
+        ctx.fillStyle = 'rgba(100, 80, 50, 0.15)';
+        ctx.beginPath();
+        ctx.ellipse(0, 5, sw * 2, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Painted bamboo stick stem (hand-drawn soft bevel look from artwork)
+        const stickGrad = ctx.createLinearGradient(-sw / 2, 0, sw / 2, 0);
+        stickGrad.addColorStop(0, '#af9c6d');
+        stickGrad.addColorStop(0.35, '#dbcfa9');
+        stickGrad.addColorStop(0.7, '#c6b68b');
+        stickGrad.addColorStop(1, '#988557');
+
+        ctx.fillStyle = stickGrad;
+        ctx.beginPath();
+        ctx.roundRect(-sw / 2, -sh, sw, sh, [4, 4, 10, 10]);
+        ctx.fill();
+
+        // Bamboo joints / notches
+        ctx.strokeStyle = 'rgba(120, 100, 60, 0.35)';
+        ctx.lineWidth = 2.5;
+        for (let i = 1; i <= 3; i++) {
+          const notchY = -sh * (i / 4);
+          ctx.beginPath();
+          ctx.arc(0, notchY, sw / 1.6, 0.2, Math.PI - 0.2);
+          ctx.stroke();
+        }
+
+        // Pointy skewer tip at the top
+        ctx.fillStyle = '#eddcb4';
+        ctx.beginPath();
+        ctx.moveTo(-sw / 2, -sh);
+        ctx.lineTo(0, -sh - 20);
+        ctx.lineTo(sw / 2, -sh);
+        ctx.closePath();
+        ctx.fill();
+
+        // Player indicator ribbon bow near stick bottom
+        const ribbonColor = this.isPlayer1 ? '#5ec2b4' : '#a288e2';
+        ctx.fillStyle = ribbonColor;
+        ctx.beginPath();
+        ctx.ellipse(-14, -30, 10, 6, -0.3, 0, Math.PI * 2);
+        ctx.ellipse(14, -30, 10, 6, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(0, -30, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+
+        // Draw skewered mochis on this stick!
+        for (let i = 0; i < this.caughtMochis.length; i++) {
+          const m = this.caughtMochis[i];
+          const mochiY = this.y - 45 - (i * 38);
+          m.drawSkewered(ctx, this.x, mochiY, i);
+        }
+      }
+    }
+
+    /* =========================================================
+     * MOCHI OBJECT
+     * ========================================================= */
+    class Mochi {
+      constructor(index) {
+        this.index = index;
+        this.radius = 36;
+        this.x = 40 + Math.random() * (width - 80);
+        this.y = -60 - (index * 85) - Math.random() * 40;
+        this.vy = 2.0 + Math.random() * 1.5;
+        this.vx = (Math.random() - 0.5) * 1.2;
+        this.wobbleSpeed = 0.04 + Math.random() * 0.03;
+        this.wobbleAngle = Math.random() * Math.PI * 2;
+        this.wobbleAmp = 0.12;
+        
+        // Palette matching painting
+        const paletteIndex = index % MOCHI_PALETTES.length;
+        this.palette = MOCHI_PALETTES[paletteIndex];
+
+        this.squishX = 1;
+        this.squishY = 1;
+        this.isCaught = false;
+        this.caughtBy = null;
+        this.isMissed = false;
+        this.blinkTimer = Math.floor(Math.random() * 180);
+        this.isBlinking = false;
+        this.faceMood = 'happy'; // 'happy', 'caught', 'surprised'
+      }
+
+      update() {
+        if (this.isCaught) return;
+
+        this.y += this.vy;
+        this.x += this.vx;
+
+        // Slight bounce off walls
+        if (this.x < this.radius + 10) {
+          this.x = this.radius + 10;
+          this.vx *= -1;
+        } else if (this.x > width - this.radius - 10) {
+          this.x = width - this.radius - 10;
+          this.vx *= -1;
+        }
+
+        this.wobbleAngle += this.wobbleSpeed;
+        this.squishX = 1 + Math.sin(this.wobbleAngle) * 0.08;
+        this.squishY = 1 - Math.sin(this.wobbleAngle) * 0.08;
+
+        // Blinking logic
+        this.blinkTimer--;
+        if (this.blinkTimer <= 0) {
+          this.isBlinking = !this.isBlinking;
+          this.blinkTimer = this.isBlinking ? 10 : (120 + Math.random() * 180);
+        }
+
+        // Check if fell past ground
+        if (this.y > height + 60 && !this.isMissed) {
+          this.isMissed = true;
+          mochisFinished++;
+          sound.playDropSound();
+          updateMochiCounter();
+          checkRoundEnd();
+        }
+      }
+
+      drawFalling(ctx) {
+        if (this.isCaught || this.isMissed) return;
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.scale(this.squishX, this.squishY);
+
+        this.renderMochiBody(ctx, 0, 0, this.radius, false);
+        this.renderFace(ctx, 0, 0, this.radius);
+
+        ctx.restore();
+      }
+
+      drawSkewered(ctx, cx, cy, stackIdx) {
+        ctx.save();
+        ctx.translate(cx, cy);
+
+        // Skewered mochis have a squish and slight angle
+        const tilt = Math.sin(stackIdx * 1.5) * 0.08;
+        ctx.rotate(tilt);
+
+        // Slightly squished from stick penetration
+        ctx.scale(1.08, 0.92);
+
+        this.renderMochiBody(ctx, 0, 0, this.radius * 0.95, true);
+        this.renderFace(ctx, 0, 0, this.radius * 0.95);
+
+        // Draw small bamboo skewer through middle
+        ctx.fillStyle = '#a59163';
+        ctx.fillRect(-3, -this.radius * 1.1, 6, this.radius * 2.2);
+
+        ctx.restore();
+      }
+
+      renderMochiBody(ctx, ox, oy, r, isSkewered) {
+        // Soft drop shadow
+        ctx.fillStyle = 'rgba(90, 70, 50, 0.12)';
+        ctx.beginPath();
+        ctx.ellipse(ox, oy + r * 0.8, r * 0.85, r * 0.35, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Main painted round body (radial gradient gives smooth hand-painted 3D depth)
+        const radGrad = ctx.createRadialGradient(
+          ox - r * 0.3, oy - r * 0.35, r * 0.15,
+          ox, oy, r
+        );
+        radGrad.addColorStop(0, this.palette.light);
+        radGrad.addColorStop(0.65, this.palette.fill);
+        radGrad.addColorStop(1, this.palette.dark);
+
+        ctx.fillStyle = radGrad;
+        ctx.beginPath();
+        // Hand-painted organic shape using soft bezier squircle
+        const k = 0.552284749831;
+        const rx = r;
+        const ry = r * 0.92;
+        ctx.beginPath();
+        ctx.moveTo(ox, oy - ry);
+        ctx.bezierCurveTo(ox + k * rx, oy - ry, ox + rx, oy - k * ry, ox + rx, oy);
+        ctx.bezierCurveTo(ox + rx, oy + k * ry * 1.08, ox + k * rx, oy + ry * 1.08, ox, oy + ry * 1.08);
+        ctx.bezierCurveTo(ox - k * rx, oy + ry * 1.08, ox - rx, oy + k * ry * 1.08, ox - rx, oy);
+        ctx.bezierCurveTo(ox - rx, oy - k * ry, ox - k * rx, oy - ry, ox, oy - ry);
+        ctx.closePath();
+        ctx.fill();
+
+        // Powder / starch highlight sheen at top right
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+        ctx.beginPath();
+        ctx.ellipse(ox + r * 0.28, oy - r * 0.35, r * 0.28, r * 0.16, 0.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      renderFace(ctx, ox, oy, r) {
+        const eyeOffset = r * 0.38;
+        const eyeY = oy - r * 0.05;
+        const eyeColor = this.palette.face;
+
+        // Blush cheeks
+        ctx.fillStyle = 'rgba(255, 120, 140, 0.45)';
+        ctx.beginPath();
+        ctx.arc(ox - eyeOffset - 4, eyeY + 11, 7, 0, Math.PI * 2);
+        ctx.arc(ox + eyeOffset + 4, eyeY + 11, 7, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Eyes
+        ctx.fillStyle = eyeColor;
+        if (this.isBlinking) {
+          // Sleeping / Happy blink line ^ ^
+          ctx.lineWidth = 2.5;
+          ctx.strokeStyle = eyeColor;
+          ctx.lineCap = 'round';
+          
+          ctx.beginPath();
+          ctx.arc(ox - eyeOffset, eyeY + 2, 5, Math.PI, 0);
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.arc(ox + eyeOffset, eyeY + 2, 5, Math.PI, 0);
+          ctx.stroke();
+        } else {
+          // Big kawaii glossy eyes
+          ctx.beginPath();
+          ctx.arc(ox - eyeOffset, eyeY, 4.5, 0, Math.PI * 2);
+          ctx.arc(ox + eyeOffset, eyeY, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          // White twinkle glints
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(ox - eyeOffset - 1.5, eyeY - 1.5, 1.8, 0, Math.PI * 2);
+          ctx.arc(ox + eyeOffset - 1.5, eyeY - 1.5, 1.8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Mouth
+        ctx.strokeStyle = eyeColor;
+        ctx.lineWidth = 2.2;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        if (this.isCaught) {
+          // Joyful open smile :D
+          ctx.fillStyle = '#ff7688';
+          ctx.arc(ox, eyeY + 8, 5.5, 0, Math.PI);
+          ctx.fill();
+          ctx.stroke();
+        } else {
+          // Sweet tiny smile w / v
+          ctx.arc(ox, eyeY + 6, 4.5, 0.2, Math.PI - 0.2);
+          ctx.stroke();
+        }
+      }
+    }
+
+    /* =========================================================
+     * SPARKLE CONFETTI PARTICLES
+     * ========================================================= */
+    class Particle {
+      constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 2.5 + Math.random() * 5.0;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed - 1.5;
+        this.size = 5 + Math.random() * 7;
+        this.alpha = 1;
+        this.decay = 0.02 + Math.random() * 0.03;
+        this.shape = Math.random() > 0.4 ? 'star' : 'circle';
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += 0.15; // Gravity
+        this.alpha -= this.decay;
+      }
+
+      draw(ctx) {
+        if (this.alpha <= 0) return;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.alpha);
+        ctx.fillStyle = this.color;
+
+        if (this.shape === 'star') {
+          // Draw small four-point sparkle
+          ctx.translate(this.x, this.y);
+          ctx.beginPath();
+          ctx.moveTo(0, -this.size);
+          ctx.quadraticCurveTo(0, 0, this.size, 0);
+          ctx.quadraticCurveTo(0, 0, 0, this.size);
+          ctx.quadraticCurveTo(0, 0, -this.size, 0);
+          ctx.quadraticCurveTo(0, 0, 0, -this.size);
+          ctx.fill();
+        } else {
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.size / 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+    }
+
+    /* =========================================================
+     * GAME ENGINE & INSTANTIATION
+     * ========================================================= */
+    let player1 = new Stick(true);
+    let player2 = new Stick(false);
+    let mochis = [];
+    let particles = [];
+    let scoreP1 = 0;
+    let scoreP2 = 0;
+
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+
+      player1.initPos(width, height);
+      player2.initPos(width, height);
+    }
+
+    function initWave() {
+      mochisSpawned = TOTAL_MOCHIS_IN_ROUND;
+      mochisFinished = 0;
+      isGameOver = false;
+      mochis = [];
+      particles = [];
+
+      player1.caughtMochis = [];
+      player2.caughtMochis = [];
+      player1.initPos(width, height);
+      player2.initPos(width, height);
+
+      // Create exactly 10 mochis spaced out nicely
+      for (let i = 0; i < TOTAL_MOCHIS_IN_ROUND; i++) {
+        mochis.push(new Mochi(i));
+      }
+
+      updateScoreUI();
+      updateMochiCounter();
+      document.getElementById('round-modal').classList.add('hidden');
+    }
+
+    function updateScoreUI() {
+      document.getElementById('score-p1').innerText = scoreP1;
+      document.getElementById('score-p2').innerText = scoreP2;
+    }
+
+    function updateMochiCounter() {
+      const caughtCount = player1.caughtMochis.length + player2.caughtMochis.length;
+      const finished = mochisFinished + caughtCount;
+      document.getElementById('mochi-counter').innerText = `${finished} / ${TOTAL_MOCHIS_IN_ROUND}`;
+    }
+
+    function createSparkles(x, y, color) {
+      const palette = [color, '#ffffff', '#ffd166', '#ff9ebb', '#a0e7e5'];
+      for (let i = 0; i < 18; i++) {
+        const c = palette[Math.floor(Math.random() * palette.length)];
+        particles.push(new Particle(x, y, c));
+      }
+    }
+
+    function checkCollisions() {
+      const sticks = [player1, player2];
+
+      for (let m of mochis) {
+        if (m.isCaught || m.isMissed) continue;
+
+        for (let s of sticks) {
+          const tip = s.getTipPosition();
+          // Distance from stick catch-tip to mochi center
+          const dx = tip.x - m.x;
+          const dy = tip.y - m.y;
+          const dist = Math.hypot(dx, dy);
+
+          // Catch tolerance
+          if (dist < m.radius + 18 && m.y < tip.y + 10) {
+            // Skewer success!
+            m.isCaught = true;
+            m.caughtBy = s;
+            s.caughtMochis.push(m);
+
+            if (s.isPlayer1) {
+              scoreP1++;
+            } else {
+              scoreP2++;
+            }
+
+            sound.playCatchSound(s.isPlayer1);
+            createSparkles(tip.x, tip.y - 10, m.palette.fill);
+            updateScoreUI();
+            updateMochiCounter();
+            checkRoundEnd();
+            break;
+          }
+        }
+      }
+    }
+
+    function checkRoundEnd() {
+      const totalProcessed = player1.caughtMochis.length + player2.caughtMochis.length + mochisFinished;
+      if (totalProcessed >= TOTAL_MOCHIS_IN_ROUND && !isGameOver) {
+        isGameOver = true;
+        setTimeout(showRoundSummary, 800);
+      }
+    }
+
+    function showRoundSummary() {
+      sound.playWinFanfare();
+
+      const modal = document.getElementById('round-modal');
+      const title = document.getElementById('modal-title');
+      const desc = document.getElementById('modal-desc');
+      const badge = document.getElementById('modal-badge');
+      const finalP1 = document.getElementById('final-p1');
+      const finalP2 = document.getElementById('final-p2');
+
+      finalP1.innerText = player1.caughtMochis.length;
+      finalP2.innerText = player2.caughtMochis.length;
+
+      const p1Catch = player1.caughtMochis.length;
+      const p2Catch = player2.caughtMochis.length;
+
+      if (p1Catch > p2Catch) {
+        badge.className = "inline-block px-4 py-1 rounded-full text-xs font-black tracking-widest uppercase mb-2 shadow-sm bg-teal-100 text-teal-800";
+        badge.innerText = "Player 1 Victory!";
+        title.innerText = "Mint Stick Wins! 🍡";
+        title.style.color = "#2a7b6f";
+        desc.innerText = `Player 1 deftly caught ${p1Catch} mochis on the skewer!`;
+      } else if (p2Catch > p1Catch) {
+        badge.className = "inline-block px-4 py-1 rounded-full text-xs font-black tracking-widest uppercase mb-2 shadow-sm bg-purple-100 text-purple-800";
+        badge.innerText = "Player 2 Victory!";
+        title.innerText = "Lilac Stick Wins! 🍡";
+        title.style.color = "#7155b5";
+        desc.innerText = `Player 2 skillfully caught ${p2Catch} mochis on the skewer!`;
+      } else {
+        badge.className = "inline-block px-4 py-1 rounded-full text-xs font-black tracking-widest uppercase mb-2 shadow-sm bg-amber-100 text-amber-800";
+        badge.innerText = "Delightful Tie!";
+        title.innerText = "Sweet Harmony! 🌸";
+        title.style.color = "#a07c40";
+        desc.innerText = `Both players caught exactly ${p1Catch} delicious mochis!`;
+      }
+
+      modal.classList.remove('hidden');
+    }
+
+    /* =========================================================
+     * MAIN GAME LOOP
+     * ========================================================= */
+    function gameLoop() {
+      ctx.clearRect(0, 0, width, height);
+
+      // 1. Update & Render Sticks
+      player1.update();
+      player2.update();
+
+      player1.draw(ctx);
+      player2.draw(ctx);
+
+      // 2. Update & Render Falling Mochis
+      for (let m of mochis) {
+        m.update();
+        m.drawFalling(ctx);
+      }
+
+      // 3. Check for catches
+      checkCollisions();
+
+      // 4. Update & Render Sparkles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.update();
+        p.draw(ctx);
+        if (p.alpha <= 0) {
+          particles.splice(i, 1);
+        }
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    /* =========================================================
+     * MULTI-TOUCH & INPUT CONTROLS
+     * ========================================================= */
+    // Keyboard listeners
+    window.addEventListener('keydown', (e) => {
+      sound.init();
+      if (e.code === 'KeyA') keys.KeyA = true;
+      if (e.code === 'KeyD') keys.KeyD = true;
+      if (e.code === 'ArrowLeft') keys.ArrowLeft = true;
+      if (e.code === 'ArrowRight') keys.ArrowRight = true;
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (e.code === 'KeyA') keys.KeyA = false;
+      if (e.code === 'KeyD') keys.KeyD = false;
+      if (e.code === 'ArrowLeft') keys.ArrowLeft = false;
+      if (e.code === 'ArrowRight') keys.ArrowRight = false;
+    });
+
+    // Touch event listeners for 2 fingers / 2 players simultaneous dragging
+    function handleTouch(e) {
+      sound.init();
+      const rect = canvas.getBoundingClientRect();
+      const midX = width / 2;
+
+      for (let i = 0; i < e.touches.length; i++) {
+        const touch = e.touches[i];
+        const tx = touch.clientX - rect.left;
+
+        // Player 1 controls left side, Player 2 controls right side
+        if (tx < midX) {
+          player1.targetX = tx;
+        } else {
+          player2.targetX = tx;
+        }
+      }
+    }
+
+    canvas.addEventListener('touchstart', (e) => {
+      handleTouch(e);
+      e.preventDefault();
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', (e) => {
+      handleTouch(e);
+      e.preventDefault();
+    }, { passive: false });
+
+    // Mouse control support for desktop dragging
+    let isMouseDown = false;
+    canvas.addEventListener('mousedown', (e) => {
+      sound.init();
+      isMouseDown = true;
+      const mx = e.clientX;
+      if (mx < width / 2) player1.targetX = mx;
+      else player2.targetX = mx;
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (!isMouseDown) return;
+      const mx = e.clientX;
+      if (mx < width / 2) player1.targetX = mx;
+      else player2.targetX = mx;
+    });
+
+    window.addEventListener('mouseup', () => {
+      isMouseDown = false;
+    });
+
+    // Audio toggle button
+    document.getElementById('sound-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      sound.init();
+      sound.muted = !sound.muted;
+      document.getElementById('sound-icon').innerText = sound.muted ? '🔇' : '🔊';
+    });
+
+    // Restart / Play Again Wave Button
+    document.getElementById('btn-restart').addEventListener('click', () => {
+      scoreP1 = 0;
+      scoreP2 = 0;
+      initWave();
+    });
+
+    // Auto-hide the bottom touch guide after 7 seconds
+    setTimeout(() => {
+      const guide = document.getElementById('touch-guide');
+      if (guide) guide.style.opacity = '0.35';
+    }, 7000);
+
+    /* =========================================================
+     * INITIALIZATION
+     * ========================================================= */
+    window.addEventListener('resize', resize);
+
+    window.onload = function() {
+      resize();
+      initWave();
+      gameLoop();
+    };
+  </script>
+</body>
+</html>
